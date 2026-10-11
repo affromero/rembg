@@ -1,0 +1,35 @@
+name: HTTP security and CPU model regressions
+on:
+  push:
+    branches: [security/2.0.69-backports]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
+      - name: Create the CPU test environment
+        run: |
+          mkdir -p "$RUNNER_TEMP/rembg-check"
+          cat > "$RUNNER_TEMP/rembg-check/pyproject.toml" <<TOML
+          [project]
+          name = "rembg-security-check"
+          version = "0.0.0"
+          requires-python = ">=3.11,<3.12"
+          dependencies = ["rembg[cpu,cli]", "numpy==1.26.4", "opencv-python-headless==4.11.0.86", "scipy==1.11.4", "scikit-image==0.20.0", "pytest==8.4.2", "pytest-asyncio==1.4.0", "httpx==0.28.1", "onnx==1.23.2", "black==26.10.1", "isort==9.0.2"]
+          [tool.uv.sources]
+          rembg = { path = "$GITHUB_WORKSPACE", editable = true }
+          TOML
+          uv sync --project "$RUNNER_TEMP/rembg-check" --python 3.11.15
+      - name: Verify public HTTP boundaries and custom CPU inference
+        run: uv run --project "$RUNNER_TEMP/rembg-check" --no-sync python -m pytest tests/test_http_security.py -q
+      - name: Check changed Python formatting
+        run: |
+          uv run --project "$RUNNER_TEMP/rembg-check" --no-sync black --check rembg/http_security.py rembg/commands/s_command.py tests/test_http_security.py
+          uv run --project "$RUNNER_TEMP/rembg-check" --no-sync isort --check-only --profile black rembg/http_security.py rembg/commands/s_command.py tests/test_http_security.py

@@ -88,6 +88,10 @@ setup(
     install_requires=install_requires,
     entry_points=entry_points,
     extras_require=extras_require,
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
+    version="2.0.69+security.1",
+    cmdclass={
+        name: command
+        for name, command in versioneer.get_cmdclass().items()
+        if name != "sdist"
+    },
 )

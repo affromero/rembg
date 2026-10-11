@@ -1,6 +1,4 @@
-from . import _version
-
-__version__ = _version.get_versions()["version"]
+__version__ = "2.0.69+security.1"
 
 from .bg import remove
 from .session_factory import new_session

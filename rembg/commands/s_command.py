@@ -3,17 +3,17 @@ import os
 import webbrowser
 from typing import Optional, Tuple, cast
 
-import aiohttp
 import click
 import gradio as gr
 import uvicorn
 from asyncer import asyncify
-from fastapi import Depends, FastAPI, File, Form, Query
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response
 
-from .._version import get_versions
+from .. import __version__
 from ..bg import remove
+from ..http_security import fetch_public_image, validate_http_model_options
 from ..session_factory import new_session
 from ..sessions import sessions_names
 from ..sessions.base import BaseSession
@@ -62,7 +62,7 @@ def s_command(port: int, host: str, log_level: str, threads: int) -> None:
     This function starts the FastAPI web server with the specified port and log level.
     If the number of worker threads is specified, it sets the thread limiter accordingly.
     """
-    sessions: dict[str, BaseSession] = {}
+    sessions: dict[str, Tuple[str, BaseSession]] = {}
     tags_metadata = [
         {
             "name": "Background Removal",
@@ -76,7 +76,7 @@ def s_command(port: int, host: str, log_level: str, threads: int) -> None:
     app = FastAPI(
         title="Rembg",
         description="Rembg is a tool to remove images background. That is it.",
-        version=get_versions()["version"],
+        version=__version__,
         contact={
             "name": "Daniel Gatis",
             "url": "https://github.com/danielgatis",
@@ -90,10 +90,15 @@ def s_command(port: int, host: str, log_level: str, threads: int) -> None:
         docs_url="/api",
     )
 
+    cors_origins = json.loads(os.environ.get("REMBG_CORS_ORIGINS", "[]"))
+    if not isinstance(cors_origins, list) or any(
+        not isinstance(origin, str) or "*" in origin for origin in cors_origins
+    ):
+        raise ValueError("REMBG_CORS_ORIGINS must be a JSON list of explicit origins")
     app.add_middleware(
         CORSMiddleware,
-        allow_credentials=True,
-        allow_origins=["*"],
+        allow_credentials=False,
+        allow_origins=cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -191,16 +196,20 @@ def s_command(port: int, host: str, log_level: str, threads: int) -> None:
     def im_without_bg(content: bytes, commons: CommonQueryParams) -> Response:
         kwargs = {}
 
-        if commons.extras:
-            try:
-                kwargs.update(json.loads(commons.extras))
-            except Exception:
-                pass
+        try:
+            if commons.extras:
+                kwargs = json.loads(commons.extras)
+            kwargs = validate_http_model_options(kwargs)
+        except (ValueError, OSError) as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
 
-        session = sessions.get(commons.model)
-        if session is None:
+        options_key = json.dumps(kwargs, sort_keys=True, separators=(",", ":"))
+        cached = sessions.get(commons.model)
+        if cached is None or cached[0] != options_key:
             session = new_session(commons.model, **kwargs)
-            sessions[commons.model] = session
+            sessions[commons.model] = options_key, session
+        else:
+            session = cached[1]
 
         return Response(
             remove(
@@ -243,10 +252,11 @@ def s_command(port: int, host: str, log_level: str, threads: int) -> None:
         ),
         commons: CommonQueryParams = Depends(),
     ):
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                file = await response.read()
-                return await asyncify(im_without_bg)(file, commons)
+        try:
+            file = await fetch_public_image(url)
+        except (ValueError, OSError) as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        return await asyncify(im_without_bg)(file, commons)
 
     @app.post(
         path="/api/remove",
@@ -279,6 +289,7 @@ def s_command(port: int, host: str, log_level: str, threads: int) -> None:
 
             if cmd_args:
                 kwargs.update(json.loads(cmd_args))
+            kwargs = validate_http_model_options(kwargs)
             kwargs["session"] = new_session(model, **kwargs)
 
             with open(input_path, "rb") as i:

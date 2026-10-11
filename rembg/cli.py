@@ -1,11 +1,11 @@
 import click
 
-from . import _version
+from . import __version__
 from .commands import command_functions
 
 
 @click.group()
-@click.version_option(version=_version.get_versions()["version"])
+@click.version_option(version=__version__)
 def _main() -> None:
     pass
 
