@@ -91,7 +91,7 @@ setup(
     install_requires=install_requires,
     entry_points=entry_points,
     extras_require=extras_require,
-    version="2.0.69+security.1",
+    version="2.0.69+security.2",
     cmdclass={
         name: command
         for name, command in versioneer.get_cmdclass().items()

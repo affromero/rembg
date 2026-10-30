@@ -72,6 +72,32 @@ def transform_masks(masks, original_size, transform_matrix):
     return np.array(output_masks)
 
 
+SAM_CHECKSUMS = {
+    "sam_vit_b_01ec64.encoder.onnx": "md5:a780f8ba09bceceaa1435724ed354848",
+    "sam_vit_b_01ec64.decoder.onnx": "md5:c4218b16ec1cb09889fcd6eb7a42a7c9",
+    "sam_vit_b_01ec64.encoder.quant.onnx": "md5:26fc0e01d2fa34ed2d3f91259118482d",
+    "sam_vit_b_01ec64.decoder.quant.onnx": "md5:45391530307d1aee79b2a1507769e6c7",
+    "sam_vit_l_0b3195.encoder.onnx": "md5:6e7c5e3e97b50a9e833e55062ae35182",
+    "sam_vit_l_0b3195.decoder.onnx": "md5:dc760a2912862c05ec3ac2658162a1b5",
+    "sam_vit_l_0b3195.encoder.quant.onnx": "md5:83f7fe08c2f8b94b6d08c3e44cf1de0e",
+    "sam_vit_l_0b3195.decoder.quant.onnx": "md5:e78ca201f5ae92288945623f48088b7c",
+    "sam_vit_h_4b8939.encoder.onnx": "md5:2630bbbf7f256ff82455ecce70467734",
+    "sam_vit_h_4b8939.decoder.onnx": "md5:2241a15c7c5e5b6ac018223d1a795a94",
+    "sam_vit_h_4b8939.encoder.quant.onnx": "md5:391503beb5e5d7d1ae6f55d0cecabd50",
+    "sam_vit_h_4b8939.decoder.quant.onnx": "md5:4c86ebeecbe2e6325203b641b8702a5b",
+    "sam_vit_h_4b8939.encoder_data.1.bin": "md5:22316455879cd64f1414bc2cc84772ab",
+    "sam_vit_h_4b8939.encoder_data.2.bin": "md5:3ca4efe12cd9a686e60364a628546440",
+    "sam_vit_h_4b8939.encoder_data.3.bin": "md5:635041e6eac1c3e6ac7eceeef1ed1f38",
+}
+SAM_MODELS = frozenset({"sam_vit_b_01ec64", "sam_vit_l_0b3195", "sam_vit_h_4b8939"})
+
+
+def validate_sam_model(value: object) -> str:
+    if not isinstance(value, str) or value not in SAM_MODELS:
+        raise ValueError("sam_model must name a published SAM checkpoint")
+    return value
+
+
 class SamSession(BaseSession):
     """
     This class represents a session for the Sam model.
@@ -259,8 +285,13 @@ class SamSession(BaseSession):
         Returns:
             tuple: A tuple containing the file paths of the downloaded encoder and decoder models.
         """
-        model_name = kwargs.get("sam_model", "sam_vit_b_01ec64")
-        quant = kwargs.get("sam_quant", False)
+        model_name = validate_sam_model(kwargs.get("sam_model", "sam_vit_b_01ec64"))
+        quant = bool(kwargs.get("sam_quant", False))
+
+        def known_hash(filename: str) -> str | None:
+            if cls.checksum_disabled(*args, **kwargs):
+                return None
+            return SAM_CHECKSUMS[filename]
 
         fname_encoder = f"{model_name}.encoder.onnx"
         fname_decoder = f"{model_name}.decoder.onnx"
@@ -271,7 +302,7 @@ class SamSession(BaseSession):
 
         pooch.retrieve(
             f"https://github.com/danielgatis/rembg/releases/download/v0.0.0/{fname_encoder}",
-            None,
+            known_hash(fname_encoder),
             fname=fname_encoder,
             path=cls.u2net_home(*args, **kwargs),
             progressbar=True,
@@ -279,7 +310,7 @@ class SamSession(BaseSession):
 
         pooch.retrieve(
             f"https://github.com/danielgatis/rembg/releases/download/v0.0.0/{fname_decoder}",
-            None,
+            known_hash(fname_decoder),
             fname=fname_decoder,
             path=cls.u2net_home(*args, **kwargs),
             progressbar=True,
@@ -295,7 +326,7 @@ class SamSession(BaseSession):
             for i in range(1, 4):
                 pooch.retrieve(
                     f"https://github.com/danielgatis/rembg/releases/download/v0.0.0/sam_vit_h_4b8939.encoder_data.{i}.bin",
-                    None,
+                    known_hash(f"sam_vit_h_4b8939.encoder_data.{i}.bin"),
                     fname=f"sam_vit_h_4b8939.encoder_data.{i}.bin",
                     path=cls.u2net_home(*args, **kwargs),
                     progressbar=True,

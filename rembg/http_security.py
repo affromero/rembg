@@ -12,6 +12,7 @@ from aiohttp.resolver import ThreadedResolver
 from yarl import URL
 
 from .sessions.base import BaseSession
+from .sessions.sam import validate_sam_model
 
 
 def validate_public_address(address):
@@ -84,6 +85,8 @@ def validate_http_model_options(options):
     if not isinstance(options, dict):
         raise ValueError("Model options must be a JSON object")
     options = options.copy()
+    if "sam_model" in options:
+        options["sam_model"] = validate_sam_model(options["sam_model"])
     if "model_path" not in options:
         return options
     model_path = options["model_path"]
