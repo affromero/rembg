@@ -2,6 +2,7 @@ import asyncio
 import io
 import json
 import socket
+from pathlib import Path
 
 import aiohappyeyeballs
 import aiohttp.web
@@ -10,6 +11,7 @@ import numpy as np
 import onnx
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI
 from onnx import TensorProto, helper
 from PIL import Image
 
@@ -430,3 +432,30 @@ async def test_http_model_options_select_the_requested_weights(http_app, model_f
             masks.append(np.asarray(Image.open(io.BytesIO(response.content))))
     np.testing.assert_array_equal(masks[0], masks[2])
     assert not np.array_equal(masks[0], masks[1])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "sam_model", ["sam_vit_b_01ec64#/../../../evil", "../../evil", None, [], {}]
+)
+async def test_http_rejects_injected_sam_names_without_creating_models(
+    http_app: FastAPI,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    sam_model: object,
+) -> None:
+    cache = tmp_path / "models"
+    monkeypatch.setenv("U2NET_HOME", str(cache))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=http_app), base_url="http://testserver"
+    ) as client:
+        for _ in range(2):
+            response = await client.post(
+                "/api/remove",
+                params={"extras": json.dumps({"sam_model": sam_model})},
+                data={"model": "sam"},
+                files={"file": ("input.png", b"unused", "image/png")},
+            )
+            assert response.status_code == 400
+            assert "sam_model" in response.json()["detail"]
+    assert not cache.exists()

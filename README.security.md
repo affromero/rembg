@@ -1,7 +1,7 @@
 # rembg 2.0.69 security backports
 
 This fork retains the rembg 2.0.69 library and CLI interfaces and identifies
-the patched package as `2.0.69+security.1`.
+the patched package as `2.0.69+security.2`.
 
 GHSA-55v6-g8pm-pw4c is addressed at the HTTP image-fetch boundary. The fetcher
 validates HTTP and HTTPS URLs, rejects private and ambiguous IP literals, and
@@ -32,3 +32,10 @@ symlink and file-existence gaps in the proposed upstream changes.
 The security tests use an actual HTTP server with DNS and network connections
 controlled at system boundaries. Custom model tests run small ONNX models on
 CPU through all three supported custom sessions and through the HTTP API.
+
+GHSA-qr6x-7v33-6qmg is addressed by allowing only the three published SAM
+checkpoint names before constructing download URLs or cache paths. HTTP
+requests with invalid SAM names return 400. Every SAM model and sidecar
+download uses the checksum from upstream commit
+`b2758c6b39bb2b02df90a03128110339476984d3`. Library and CLI callers retain
+the existing operator-controlled `MODEL_CHECKSUM_DISABLED` behavior.

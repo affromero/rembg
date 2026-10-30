@@ -28,8 +28,8 @@ jobs:
           TOML
           uv sync --project "$RUNNER_TEMP/rembg-check" --python 3.11.15
       - name: Verify public HTTP boundaries and custom CPU inference
-        run: uv run --project "$RUNNER_TEMP/rembg-check" --no-sync python -m pytest tests/test_http_security.py -q
+        run: uv run --project "$RUNNER_TEMP/rembg-check" --no-sync python -m pytest tests/test_http_security.py tests/test_sam_model_allowlist.py -q
       - name: Check changed Python formatting
         run: |
-          uv run --project "$RUNNER_TEMP/rembg-check" --no-sync black --check rembg/http_security.py rembg/commands/s_command.py tests/test_http_security.py
-          uv run --project "$RUNNER_TEMP/rembg-check" --no-sync isort --check-only --profile black rembg/http_security.py rembg/commands/s_command.py tests/test_http_security.py
+          uv run --project "$RUNNER_TEMP/rembg-check" --no-sync black --check rembg/http_security.py rembg/commands/s_command.py rembg/sessions/sam.py tests/test_http_security.py tests/test_sam_model_allowlist.py
+          uv run --project "$RUNNER_TEMP/rembg-check" --no-sync isort --check-only --profile black rembg/http_security.py rembg/commands/s_command.py rembg/sessions/sam.py tests/test_http_security.py tests/test_sam_model_allowlist.py
